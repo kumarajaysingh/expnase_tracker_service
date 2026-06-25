@@ -1,50 +1,22 @@
-from datetime import date as date_type
-from typing import List
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
-from pydantic import BaseModel
 
-app = FastAPI(title="Expense Tracker Service")
-
-expenses: List[dict] = []
-_next_id = 1
+from app.db.connection import init_db
+from app.routers.expense_router import router as expense_router
+from app.routers.budget_router import router as  budget_router
 
 
-class Expense(BaseModel):
-    amount: float
-    category: str
-    description: str = ""
-    date: str = ""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
 
 
-@app.post("/api/expense")
-def add_expense(expense: Expense):
-    global _next_id
-    record = expense.model_dump()
-    record["id"] = _next_id
-    if not record["date"]:
-        record["date"] = date_type.today().isoformat()
-    _next_id += 1
-    expenses.append(record)
-    return record
-
-
-@app.get("/api/expense/summary")
-def get_summary(category: str = "", start_date: str = "", end_date: str = ""):
-    results = expenses
-    if category:
-        results = [e for e in results if e["category"].lower() == category.lower()]
-    if start_date:
-        results = [e for e in results if e["date"] >= start_date]
-    if end_date:
-        results = [e for e in results if e["date"] <= end_date]
-
-    return {
-        "count": len(results),
-        "total_amount": sum(e["amount"] for e in results),
-        "expenses": results,
-    }
+app = FastAPI(title="Expense Tracker Service", lifespan=lifespan)
+app.include_router(expense_router)
+app.include_router(budget_router)
 
 
 def start_server():
